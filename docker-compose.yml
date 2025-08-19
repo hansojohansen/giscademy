@@ -1,0 +1,42 @@
+version: '3.9'
+
+services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/usr/src/app
+    command: npm run dev
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/usr/src/app
+    environment:
+      - DATABASE_URL=postgresql://giscademy_user:giscademy_pass@db:5432/giscademy
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  db:
+    image: postgis/postgis:latest
+    environment:
+      POSTGRES_DB: giscademy
+      POSTGRES_USER: giscademy_user
+      POSTGRES_PASSWORD: giscademy_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  sandbox:
+    image: python:3.10-slim
+    volumes:
+      - ./sandbox:/opt/sandbox
+    working_dir: /opt/sandbox
+    # This service can be used to execute code in a contained environment
+    # during development. In production, consider a more robust sandbox.
+
+volumes:
+  db_data:
