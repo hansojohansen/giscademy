@@ -1,69 +1,39 @@
-"""
-FastAPI backend for the Giscademy prototype.
-
-This application exposes simple endpoints for testing connectivity and to
-demonstrate how you might wire up code execution and database queries.
-
-In production you should implement proper sandboxing for the code
-execution endpoint and add authentication, validation and error handling.
-"""
-
 import os
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from fastapi import FastAPI, Body
+from fastapi.middleware.cors import CORSMiddleware
 import asyncpg
 
-app = FastAPI(title="Giscademy API", version="0.1.0")
+app = FastAPI(title="Giscademy API")
 
-# Read database URL from environment or fallback to docker-compose default
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://giscademy_user:giscademy_pass@db:5432/giscademy",
+origins = [os.getenv("ALLOW_ORIGIN", "*")]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
+DATABASE_URL = os.getenv("DATABASE_URL", "")
 
-@app.get("/")
-async def read_root():
-    """Root endpoint for health checking."""
-    return {"message": "Giscademy API is running"}
-
-
-class PythonCode(BaseModel):
-    code: str
-
-
-@app.post("/run/python")
-async def run_python_code(payload: PythonCode):
-    """
-    Placeholder endpoint for executing Python code.
-
-    For security reasons, this implementation does not execute arbitrary code.
-    In a production system, send the code to the sandbox service defined in the
-    docker-compose file. For now we simply return the code back to the client.
-    """
-    return {
-        "input": payload.code,
-        "output": "Sandbox functionality is not implemented in this prototype."
-    }
-
-
-class SQLQuery(BaseModel):
-    query: str
-
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
 
 @app.post("/run/sql")
-async def run_sql(payload: SQLQuery):
-    """
-    Execute a SQL query against the PostGIS database.
-
-    Only use this in a safe context. No sanitisation is performed.
-    For complex applications, use prepared statements and ORM frameworks.
-    """
+async def run_sql(payload: dict = Body(...)):
+    sql = payload.get("sql", "")
+    if not sql:
+        return {"rows": []}
+    conn = await asyncpg.connect(DATABASE_URL)
     try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        result = await conn.fetch(payload.query)
-        rows = [dict(record) for record in result]
+        rows = await conn.fetch(sql)
+        return {"rows": [dict(r) for r in rows]}
+    finally:
         await conn.close()
-        return {"rows": rows}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/run/python")
+async def run_python(payload: dict = Body(...)):
+    # Placeholder: IKKE evaluer bruker-kode her i prod. Dette er bare eko.
+    code = payload.get("code", "")
+    return {"echo": code}
